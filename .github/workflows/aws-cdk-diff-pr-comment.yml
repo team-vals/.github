@@ -10,11 +10,36 @@ on:
         type: number
         required: true
         description: The number of the issue to comment on.
+      node-version:
+        type: number
+        required: true
+        description: The version of node to use.
+      aws-role-to-assume:
+        type: string
+        required: true
+        description: The AWS role to assume.
+      aws-region:
+        type: string
+        default: us-east-1
+        required: false
+        description: The AWS region to use.
 
 jobs:
   comment-diff:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: ${{ input.node-version }}
+          cache: yarn
+          cache-dependency-path: yarn.lock
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ input.aws-role-to-assume }}
+          aws-region: ${{ input.aws-region }}
+      - name: Install dependencies
+        run: yarn
       - name: Diff
         id: diff
         working-directory: ${{ inputs.working-directory }}
