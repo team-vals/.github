@@ -84,7 +84,7 @@ jobs:
         if: steps.fc.outputs.comment-id != ''
         uses: peter-evans/create-or-update-comment@v1
         with:
-          comment-id: ${{ inputs.issue-number }}
+          comment-id: ${{ steps.fc.outputs.comment-id }}
           body: ${{ steps.diff.outputs.comment_body }}
           edit-mode: replace
           token: ${{ secrets.token }}
