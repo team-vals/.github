@@ -1,0 +1,87 @@
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        default: .
+        type: string
+        required: false
+        description: The directory to run aws-cdk in.
+      issue-number:
+        type: number
+        required: true
+        description: The number of the issue to comment on.
+      node-version:
+        type: number
+        required: true
+        description: The version of node to use.
+      aws-role-to-assume:
+        type: string
+        required: true
+        description: The AWS role to assume.
+      aws-region:
+        type: string
+        default: us-east-1
+        required: false
+        description: The AWS region to use.
+    secrets:
+      token:
+        required: true
+        description: The token to use for the GitHub API.
+
+jobs:
+  comment-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: yarn
+          cache-dependency-path: yarn.lock
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ inputs.aws-role-to-assume }}
+          aws-region: ${{ inputs.aws-region }}
+      - name: Install dependencies
+        run: yarn
+      - name: Diff
+        id: diff
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          diff=$(npx cdk diff --no-color -c aws-cdk:enableDiffNoFail=true 2>&1 > /dev/null)
+          comment_body="<!-- HIDDEN TOKEN: CDK_DIFF -->
+          Here is the diff between the current commit and the remote
+          \`\`\`
+          $ npx cdk diff
+          ${diff}
+          \`\`\`
+          "
+          comment_body="${comment_body//'%'/'%25'}"
+          comment_body="${comment_body//$'\n'/'%0A'}"
+          comment_body="${comment_body//$'\r'/'%0D'}"
+          echo "::set-output name=comment_body::$comment_body"
+      - name: Find Comment
+        uses: peter-evans/find-comment@v1
+        id: fc
+        with:
+          issue-number: ${{ inputs.issue-number }}
+          comment-author: "github-actions[bot]"
+          body-includes: "HIDDEN TOKEN: CDK_DIFF"
+          token: ${{ secrets.token }}
+
+      - name: Create comment
+        if: steps.fc.outputs.comment-id == ''
+        uses: peter-evans/create-or-update-comment@v1
+        with:
+          issue-number: ${{ inputs.issue-number }}
+          body: ${{ steps.diff.outputs.comment_body }}
+          token: ${{ secrets.token }}
+
+      - name: Update comment
+        if: steps.fc.outputs.comment-id != ''
+        uses: peter-evans/create-or-update-comment@v1
+        with:
+          comment-id: ${{ inputs.issue-number }}
+          body: ${{ steps.diff.outputs.comment_body }}
+          edit-mode: replace
+          token: ${{ secrets.token }}
