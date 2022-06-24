@@ -37,13 +37,16 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           cache: yarn
-          cache-dependency-path: yarn.lock
+          cache-dependency-path: |
+            yarn.lock
+            ${{ inputs.working-directory }}/yarn.lock
       - uses: aws-actions/configure-aws-credentials@v1
         with:
           role-to-assume: ${{ inputs.aws-role-to-assume }}
           aws-region: ${{ inputs.aws-region }}
       - name: Install dependencies
         run: yarn
+        working-directory: ${{ inputs.working-directory }}
       - name: Diff
         id: diff
         working-directory: ${{ inputs.working-directory }}

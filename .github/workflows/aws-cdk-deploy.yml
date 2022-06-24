@@ -1,0 +1,46 @@
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        default: .
+        type: string
+        required: false
+        description: The directory to run aws-cdk in.
+      node-version:
+        type: number
+        required: true
+        description: The version of node to use.
+      aws-role-to-assume:
+        type: string
+        required: true
+        description: The AWS role to assume.
+      aws-region:
+        type: string
+        default: us-east-1
+        required: false
+        description: The AWS region to use.
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: yarn
+          cache-dependency-path: |
+            yarn.lock
+            ${{ inputs.working-directory }}/yarn.lock
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ inputs.aws-role-to-assume }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Install dependencies
+        run: yarn
+        working-directory: ${{ inputs.working-directory }}
+      - name: Deploy
+        run: yarn cdk deploy --require-approval never
+        working-directory: ${{ inputs.working-directory }}
