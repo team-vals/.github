@@ -23,6 +23,10 @@ on:
         default: us-east-1
         required: false
         description: The AWS region to use.
+    secrets:
+      token:
+        required: true
+        description: The token to use for the GitHub API.
 
 jobs:
   comment-diff:
@@ -63,6 +67,7 @@ jobs:
           issue-number: ${{ inputs.issue-number }}
           comment-author: "github-actions[bot]"
           body-includes: "HIDDEN TOKEN: CDK_DIFF"
+          token: ${{ secrets.token }}
 
       - name: Create comment
         if: steps.fc.outputs.comment-id == ''
@@ -70,6 +75,7 @@ jobs:
         with:
           issue-number: ${{ inputs.issue-number }}
           body: ${{ steps.diff.outputs.comment_body }}
+          token: ${{ secrets.token }}
 
       - name: Update comment
         if: steps.fc.outputs.comment-id != ''
@@ -78,3 +84,4 @@ jobs:
           comment-id: ${{ inputs.issue-number }}
           body: ${{ steps.diff.outputs.comment_body }}
           edit-mode: replace
+          token: ${{ secrets.token }}
