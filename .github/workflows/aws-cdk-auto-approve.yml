@@ -1,0 +1,90 @@
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        default: .
+        type: string
+        required: false
+        description: The directory to run aws-cdk in.
+      node-version:
+        type: number
+        required: true
+        description: The version of node to use.
+      aws-role-to-assume:
+        type: string
+        required: true
+        description: The AWS role to assume.
+      aws-region:
+        type: string
+        default: us-east-1
+        required: false
+        description: The AWS region to use.
+      pr-url:
+        type: string
+        required: true
+        description: The URL of the pull request. (eg. $\{\{ github.event.pull_request.html_url \}\})
+      enable-auto-merge:
+        type: boolean
+        default: false
+        required: false
+        description: Whether to automatically merge the PR.
+    secrets:
+      token:
+        required: true
+        description: The token to use for the GitHub API.
+
+jobs:
+  auto-approve:
+    runs-on: ubuntu-latest
+    if: ${{ github.actor == 'dependabot[bot]' }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: yarn
+          cache-dependency-path: |
+            yarn.lock
+            ${{ inputs.working-directory }}/yarn.lock
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ inputs.aws-role-to-assume }}
+          aws-region: ${{ inputs.aws-region }}
+      - name: Install dependencies
+        run: yarn
+        working-directory: ${{ inputs.working-directory }}
+      - name: Check Stack has been updated
+        id: diff
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          diff=$(npx cdk diff --no-color 2>&1 | grep -x "There were no differences" | wc -l)
+          if [ "$diff" -eq "1" ]; then
+            echo "::set-output name=diff::false"
+          else
+            echo "::set-output name=diff::true"
+          fi
+
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v1.1.1
+        with:
+          github-token: "${{ secrets.token }}"
+
+      - name: Approve a PR
+        if: |
+          ${{
+            (
+              steps.metadata.outputs.update-type == 'version-update:semver-minor' 
+                || steps.metadata.outputs.update-type == 'version-update:semver-patch'
+            ) && steps.diff.outputs.diff == 'false' }}
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GITHUB_TOKEN: ${{ secrets.token }}
+
+      - name: Enable auto-merge for Dependabot PRs
+        run: gh pr merge --auto --merge "$PR_URL"
+        if: ${{ inputs.enable-auto-merge }}
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GITHUB_TOKEN: ${{ secrets.token }}
